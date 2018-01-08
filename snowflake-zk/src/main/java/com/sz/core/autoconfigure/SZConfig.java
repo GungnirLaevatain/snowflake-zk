@@ -99,8 +99,8 @@ public class SZConfig {
         //获取baseId的最大值
         final long maxId = 1 << (SnowflakeIdWorker.DATA_CENTER_ID_BITS + SnowflakeIdWorker.WORKER_ID_BITS);
         //检测是否有所需的节点，无则建立
-        curatorFramework.checkExists().creatingParentContainersIfNeeded().forPath(allWorkFolder);
-        curatorFramework.checkExists().creatingParentContainersIfNeeded().forPath(nowWorkFolder);
+        curatorFramework.checkExists().creatingParentContainersIfNeeded().forPath(allWorkFolder + "/0");
+        curatorFramework.checkExists().creatingParentContainersIfNeeded().forPath(nowWorkFolder + "/0");
         //获取已经使用过的baseId集合
         List<String> allWork = curatorFramework.getChildren().forPath(allWorkFolder);
         //获取当前正在使用的baseId集合
