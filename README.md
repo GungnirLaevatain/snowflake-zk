@@ -1,2 +1,2 @@
 # snowflake-zk
-利用zookeeper为snowflake算法分配机器id
+Using zookeeper to allocate work id for snowflake algorithm
