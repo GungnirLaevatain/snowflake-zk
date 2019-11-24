@@ -2,10 +2,10 @@ package com.sz.core.autoconfigure;
 
 import com.sz.core.properties.ZkProperty;
 import com.sz.core.utils.SnowflakeIdWorker;
-import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.curator.framework.state.ConnectionState;
+import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.zookeeper.CreateMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +29,7 @@ import java.util.List;
 @Configuration
 public class SZConfig {
 
-    private final Logger log = LoggerFactory.getLogger(this.getClass());
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final ZkProperty zkProperty;
 
@@ -74,13 +74,46 @@ public class SZConfig {
         if (baseId == -1) {
             throw new RuntimeException("create snowFlakeId fail, because baseId is illegal");
         }
+        curatorFramework.getConnectionStateListenable().addListener(new ConnectionStateListener() {
+            private int nowState = 1;
+
+            @Override
+            public void stateChanged(CuratorFramework client, ConnectionState newState) {
+                switch (newState) {
+                    case RECONNECTED:
+                        if (nowState == 0) {
+                            try {
+                                createSnowflakeIdWorker(createBaseId(client), true);
+                            } catch (Exception e) {
+                                log.error("recreate snowflakeId fail,because ", e);
+                            }
+                        }
+                        nowState = 1;
+                        break;
+                    case LOST:
+                        nowState = 0;
+                        break;
+                    default: {
+
+                    }
+                }
+            }
+        });
+        return createSnowflakeIdWorker(baseId, false);
+    }
+
+
+    private SnowflakeIdWorker createSnowflakeIdWorker(long baseId, boolean restart) {
         // TODO: 2018/1/5 应将dataCenterId割离以对应多个节点
         //将baseId拆成centerId和workId以供id生成器使用
         long workId = baseId & SnowflakeIdWorker.MAX_WORKER_ID;
         baseId = baseId >> SnowflakeIdWorker.WORKER_ID_BITS;
         long dataCenterId = baseId & SnowflakeIdWorker.MAX_DATA_CENTER_ID;
-
-        SnowflakeIdWorker.init(workId, dataCenterId);
+        if (!restart) {
+            SnowflakeIdWorker.init(workId, dataCenterId);
+        } else {
+            SnowflakeIdWorker.reInit(workId, dataCenterId);
+        }
         return SnowflakeIdWorker.getInstance();
     }
 
@@ -94,10 +127,10 @@ public class SZConfig {
      */
     private long createBaseId(CuratorFramework curatorFramework) throws Exception {
 
-        final String allWorkFolder = "/work/all";
-        final String nowWorkFolder = "/work/now";
+        String allWorkFolder = "/work/all";
+        String nowWorkFolder = "/work/now";
         //获取baseId的最大值
-        final long maxId = 1 << (SnowflakeIdWorker.DATA_CENTER_ID_BITS + SnowflakeIdWorker.WORKER_ID_BITS);
+        long maxId = 1 << (SnowflakeIdWorker.DATA_CENTER_ID_BITS + SnowflakeIdWorker.WORKER_ID_BITS);
         //检测是否有所需的节点，无则建立
         curatorFramework.checkExists().creatingParentContainersIfNeeded().forPath(allWorkFolder + "/0");
         curatorFramework.checkExists().creatingParentContainersIfNeeded().forPath(nowWorkFolder + "/0");
@@ -119,7 +152,7 @@ public class SZConfig {
                 return o1.compareTo(o2);
             });
             //获取当前已经使用的最大的baseId
-            nowMaxId = Long.valueOf(allWork.get(allWork.size() - 1));
+            nowMaxId = Long.parseLong(allWork.get(allWork.size() - 1));
             //从已使用过的baseId集合中剔除当前正在使用的baseId集合
             if (nowWork != null && nowWork.size() > 0) {
                 allWork.removeIf(nowWork::contains);
@@ -127,11 +160,11 @@ public class SZConfig {
             //如果当前还有baseId未被使用，则利用临时节点抢占选取的baseId
             if (allWork.size() > 0) {
                 for (String id : allWork) {
-                    final String path = nowWorkFolder + "/" + id;
+                    String path = nowWorkFolder + "/" + id;
                     try {
                         curatorFramework.create().withMode(CreateMode.EPHEMERAL)
                                 .forPath(path);
-                        baseId = Long.valueOf(id);
+                        baseId = Long.parseLong(id);
                         break;
                     } catch (Exception e) {
                         log.error("zk lock path fail, path is {}, because {}", path, e);
@@ -145,8 +178,8 @@ public class SZConfig {
             //当当前的最大baseId小于id生成器所支持的最大baseId时则尝试申请
             while (nowMaxId < maxId) {
                 baseId = nowMaxId;
-                final String path = nowWorkFolder + "/" + baseId;
-                final String allPath = allWorkFolder + "/" + baseId;
+                String path = nowWorkFolder + "/" + baseId;
+                String allPath = allWorkFolder + "/" + baseId;
                 try {
                     //申请并抢占新的baseId
                     curatorFramework.create().withMode(CreateMode.PERSISTENT)
@@ -169,4 +202,5 @@ public class SZConfig {
             return baseId;
         }
     }
+
 }

@@ -24,106 +24,65 @@ import org.slf4j.LoggerFactory;
  */
 public class SnowflakeIdWorker {
 
-    private static final Logger log = LoggerFactory.getLogger(SnowflakeIdWorker.class);
-
-    private static class SnowflakeIdWorkerHolder {
-
-
-        private static SnowflakeIdWorker instance;
-
-        private static synchronized void init(long workerId, long dataCenterId) {
-            if (SnowflakeIdWorkerHolder.instance != null) {
-                log.error("SnowflakeIdWorker has init!!!!!!!");
-            } else {
-                SnowflakeIdWorkerHolder.instance = new SnowflakeIdWorker(workerId, dataCenterId);
-            }
-        }
-    }
-
-    public static void init(long workerId, long dataCenterId) {
-
-        SnowflakeIdWorkerHolder.init(workerId, dataCenterId);
-    }
-
-    public static SnowflakeIdWorker getInstance() {
-
-        return SnowflakeIdWorkerHolder.instance;
-
-    }
-
-    // ==============================Fields===========================================
     /**
      * 开始时间截 (2017-12-01)
      */
     public static final long TWEPOCH = 1512057600000L;
-
     /**
      * 节点内机器id所占的位数
      */
     public static final long WORKER_ID_BITS = 5L;
-
     /**
      * 节点id所占的位数
      */
     public static final long DATA_CENTER_ID_BITS = 5L;
-
     /**
      * 序列在id中占的位数
      */
     public static final long SEQUENCE_BITS = 12L;
-
     /**
      * 支持的最大机器id，结果是31 (这个移位算法可以很快的计算出几位二进制数所能表示的最大十进制数)
      */
     public static final long MAX_WORKER_ID = ~(-1L << WORKER_ID_BITS);
 
+    // ==============================Fields===========================================
     /**
      * 支持的最大数据标识id，结果是31
      */
     public static final long MAX_DATA_CENTER_ID = ~(-1L << DATA_CENTER_ID_BITS);
-
     /**
      * 机器ID向左移数据库表和毫秒内序列所占的位数和
      */
-    public static final long WORKER_ID_SHIFT = SEQUENCE_BITS ;
-
+    public static final long WORKER_ID_SHIFT = SEQUENCE_BITS;
     /**
      * 数据标识id基于机器id再次左移机器id所占位数
      */
     public static final long DATA_CENTER_ID_SHIFT = WORKER_ID_BITS + WORKER_ID_SHIFT;
-
     /**
      * 时间截基于数据标志id左移数据标志id所占位数
      */
     public static final long TIMESTAMP_LEFT_SHIFT = DATA_CENTER_ID_BITS + DATA_CENTER_ID_SHIFT;
-
     /**
      * 生成序列的掩码，这里为4095 (0b111111111111=0xfff=4095)
      */
     public static final long SEQUENCE_MASK = ~(-1L << SEQUENCE_BITS);
-
+    private static final Logger log = LoggerFactory.getLogger(SnowflakeIdWorker.class);
     /**
      * 工作机器ID(0~31)
      */
     private long workerId;
-
     /**
      * 数据中心ID(0~31)
      */
     private long dataCenterId;
-
     /**
      * 毫秒内序列(0~4095)
      */
     private long sequence = 0L;
-
     /**
      * 上次生成ID的时间截
      */
     private long lastTimestamp = -1L;
-
-
-    //==============================Constructors=====================================
 
     /**
      * 构造函数
@@ -142,7 +101,22 @@ public class SnowflakeIdWorker {
         this.dataCenterId = dataCenterId;
     }
 
-    // ==============================Methods==========================================
+    public static void init(long workerId, long dataCenterId) {
+        SnowflakeIdWorkerHolder.init(workerId, dataCenterId);
+    }
+
+    public static void reInit(long workerId, long dataCenterId) {
+        SnowflakeIdWorkerHolder.reInit(workerId, dataCenterId);
+    }
+
+    public static SnowflakeIdWorker getInstance() {
+
+        return SnowflakeIdWorkerHolder.instance;
+
+    }
+
+
+    //==============================Constructors=====================================
 
     /**
      * 获得下一个ID (该方法是线程安全的)
@@ -179,8 +153,10 @@ public class SnowflakeIdWorker {
         return ((timestamp - TWEPOCH) << TIMESTAMP_LEFT_SHIFT)
                 | (dataCenterId << DATA_CENTER_ID_SHIFT)
                 | (workerId << WORKER_ID_SHIFT)
-                | sequence ;
+                | sequence;
     }
+
+    // ==============================Methods==========================================
 
     /**
      * 阻塞到下一个毫秒，直到获得新的时间戳
@@ -203,6 +179,29 @@ public class SnowflakeIdWorker {
      */
     private long timeGen() {
         return System.currentTimeMillis();
+    }
+
+    private static class SnowflakeIdWorkerHolder {
+
+
+        private static volatile SnowflakeIdWorker instance;
+
+        private static synchronized void init(long workerId, long dataCenterId) {
+            if (SnowflakeIdWorkerHolder.instance != null) {
+                log.error("SnowflakeIdWorker has init!!!!!!!");
+            } else {
+                SnowflakeIdWorkerHolder.instance = new SnowflakeIdWorker(workerId, dataCenterId);
+            }
+        }
+
+        private static void reInit(long workerId, long dataCenterId) {
+            synchronized (SnowflakeIdWorkerHolder.class) {
+                if (instance == null) {
+                    instance = new SnowflakeIdWorker(workerId, dataCenterId);
+                }
+            }
+        }
+
     }
 
 }
