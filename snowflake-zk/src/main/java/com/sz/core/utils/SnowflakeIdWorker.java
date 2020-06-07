@@ -194,12 +194,8 @@ public class SnowflakeIdWorker {
             }
         }
 
-        private static void reInit(long workerId, long dataCenterId) {
-            synchronized (SnowflakeIdWorkerHolder.class) {
-                if (instance == null) {
-                    instance = new SnowflakeIdWorker(workerId, dataCenterId);
-                }
-            }
+        private static synchronized void reInit(long workerId, long dataCenterId) {
+            instance = new SnowflakeIdWorker(workerId, dataCenterId);
         }
 
     }
