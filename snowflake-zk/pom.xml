@@ -15,7 +15,7 @@
         <java.version>1.8</java.version>
         <lombok.version>1.16.16</lombok.version>
         <curator.version>4.0.0</curator.version>
-        <spring-boot-autoconfigure.version>1.5.4.RELEASE</spring-boot-autoconfigure.version>
+        <spring-boot-autoconfigure.version>2.5.15</spring-boot-autoconfigure.version>
     </properties>
     <dependencies>
         <dependency>
